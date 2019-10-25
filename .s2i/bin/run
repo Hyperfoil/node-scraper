@@ -1,0 +1,12 @@
+#!/bin/bash -e
+#
+# S2I run script for the 'mannequin' image.
+# The run script executes the server that runs your application.
+#
+# For more information see the documentation:
+#	https://github.com/openshift/source-to-image/blob/master/docs/builder_image.md
+#
+
+echo "You're not supposed to use the built image directly but extract the native binary \
+and place it to an image based on another lightweight image".
+
