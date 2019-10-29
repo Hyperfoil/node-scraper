@@ -2,6 +2,7 @@ package io.hyperfoil.tools.nodescraper;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,6 +20,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 import com.fasterxml.jackson.core.JsonEncoding;
 import com.fasterxml.jackson.core.JsonFactory;
@@ -31,6 +33,8 @@ import io.vertx.core.http.HttpClientOptions;
 
 @Path("/")
 public class Scraper {
+    private static final Logger log = Logger.getLogger(ScrapeJob.class);
+
     @ConfigProperty(name = "scrape.dir", defaultValue = "")
     String scrapeDir;
 
@@ -48,6 +52,16 @@ public class Scraper {
         httpClient = vertx.createHttpClient(options);
         if (scrapeDir == null || scrapeDir.isEmpty()) {
             scrapeDir = System.getProperty("java.io.tmpdir");
+        }
+        if (authToken == null || authToken.isEmpty()) {
+            java.nio.file.Path tokenPath = Paths.get("/var/run/secrets/kubernetes.io/serviceaccount/token");
+            if (tokenPath.toFile().exists()) {
+                try {
+                    authToken = new String(Files.readAllBytes(tokenPath), StandardCharsets.UTF_8);
+                } catch (IOException e) {
+                    log.error("Failed to read token", e);
+                }
+            }
         }
     }
 
