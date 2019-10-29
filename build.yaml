@@ -1,0 +1,115 @@
+apiVersion: v1
+kind: Template
+metadata:
+  creationTimestamp: null
+  name: node-scraper
+parameters:
+- name: DOCKER_REGISTRY
+  description: "Local docker registry"
+  value: image-registry.openshift-image-registry.svc:5000
+- name: NAMESPACE
+  description: "Target namespace"
+  required: true
+objects:
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    name: ubi-quarkus-native-s2i
+  spec:
+    tags:
+    - from:
+        kind: DockerImage
+        name: quay.io/quarkus/ubi-quarkus-native-s2i:19.1.1
+      name: latest
+      referencePolicy:
+        type: Local
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    name: node-scraper-builder
+  spec:
+    tags:
+    - from:
+        kind: DockerImage
+        name: ${DOCKER_REGISTRY}/${NAMESPACE}/node-scraper-builder:latest
+      name: latest
+      referencePolicy:
+        type: Source
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    name: node-scraper
+  spec:
+    tags:
+    - from:
+        kind: DockerImage
+        name: ${DOCKER_REGISTRY}/${NAMESPACE}/node-scraper:latest
+      name: latest
+      referencePolicy:
+        type: Source
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    labels:
+      app: node-scraper
+    name: node-scraper-builder
+  spec:
+    output:
+      to:
+        kind: ImageStreamTag
+        name: node-scraper-builder:latest
+    runPolicy: Serial
+    source:
+      git:
+        uri: https://github.com/Hyperfoil/node-scraper
+      type: Git
+    strategy:
+      sourceStrategy:
+        from:
+          kind: ImageStreamTag
+          name: ubi-quarkus-native-s2i:latest
+      type: Source
+    triggers:
+      - type: ConfigChange
+      - imageChange:
+          from:
+            kind: ImageStreamTag
+            name: ubi-quarkus-native-s2i:latest
+        type: ImageChange
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    labels:
+      app: node-scraper
+    name: node-scraper
+  spec:
+    output:
+      to:
+        kind: ImageStreamTag
+        name: node-scraper:latest
+    runPolicy: Serial
+    source:
+      dockerfile: |
+        FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
+        ADD --chown=1001 /tmp/node-scraper-1.0-SNAPSHOT-runner /node-scraper
+        USER 1001
+        EXPOSE 8080/tcp 5432/tcp
+        ENTRYPOINT /node-scraper
+      images:
+        - from:
+            kind: ImageStreamTag
+            name: node-scraper-builder:latest
+          paths:
+            - sourcePath: /tmp/src/target/node-scraper-1.0-SNAPSHOT-runner
+              destinationDir: tmp
+      type: Dockerfile
+    strategy:
+      dockerStrategy: {}
+      type: Docker
+    triggers:
+    - type: ConfigChange
+    - imageChange:
+        from:
+          kind: ImageStreamTag
+          name: node-scraper-builder:latest
+      type: ImageChange

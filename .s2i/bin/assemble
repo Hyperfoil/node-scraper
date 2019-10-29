@@ -16,4 +16,5 @@ fi
 echo "---> Building application from source..."
 cd /tmp/src
 mvn install
-mvn install -Dnative
+# Clean is a workaround for https://github.com/quarkusio/quarkus/issues/4858
+mvn clean install -Dnative
