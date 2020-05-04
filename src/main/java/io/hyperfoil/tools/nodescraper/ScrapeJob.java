@@ -3,6 +3,8 @@ package io.hyperfoil.tools.nodescraper;
 import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -104,7 +106,8 @@ public class ScrapeJob implements Handler<Long> {
                   for (Map.Entry<String, Double> entry : prev.entrySet()) {
                      Double value = map.get(entry.getKey());
                      if (value != null) {
-                        generator.writeNumberField(entry.getKey(), 1000 * (value - entry.getValue()) / config.scrapeInterval);
+                        generator.writeFieldName(entry.getKey());
+                        generator.writeRawValue(BigDecimal.valueOf(1000 * (value - entry.getValue()) / config.scrapeInterval).setScale(3, RoundingMode.HALF_UP).toPlainString());
                      }
                   }
                   generator.writeEndObject();
