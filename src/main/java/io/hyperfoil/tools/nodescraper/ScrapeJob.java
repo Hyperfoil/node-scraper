@@ -30,8 +30,6 @@ public class ScrapeJob implements Handler<Long> {
    private static final Logger log = Logger.getLogger(ScrapeJob.class);
    private static final byte[] NODE_CPU_SECONDS_TOTAL = bytes("node_cpu_seconds_total");
    private static final byte[] MODE = bytes("mode=\"");
-   private static final String HTTPS = "https://";
-   private static final String HTTP = "http://";
 
    private static byte[] bytes(String node_cpu_seconds_total) {
       try {
@@ -55,6 +53,7 @@ public class ScrapeJob implements Handler<Long> {
       this.generator = generator;
       generator.writeStartArray();
       file.deleteOnExit();
+      log.infof("Started file %s", file);
    }
 
    @Override
@@ -77,11 +76,13 @@ public class ScrapeJob implements Handler<Long> {
                .handler(response -> {
                   if (response.statusCode() != 200) {
                      log.errorf("Unexpected response status: %d %s", response.statusCode(), response.statusMessage());
+                     promise.fail("Unexpected response status");
                      return;
                   }
                   processBody(response, promise);
          }).exceptionHandler(error -> {
             log.errorf(error, "Request failed");
+            promise.fail("Request failed");
          }).end();
       }
       CompositeFuture.all(futures).setHandler(result -> {
@@ -182,7 +183,7 @@ public class ScrapeJob implements Handler<Long> {
          generator.writeEndArray();
          generator.close();
       } catch (IOException e) {
-         log.error("Failed to complete the JSON file.");
+         log.error("Failed to complete the JSON file.", e);
       }
       scraper.vertx.cancelTimer(timerId);
       // schedule file deletion in 1 minute
