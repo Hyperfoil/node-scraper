@@ -22,8 +22,10 @@ import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.Promise;
 import io.vertx.core.buffer.Buffer;
+import io.vertx.core.http.HttpClientRequest;
 import io.vertx.core.http.HttpClientResponse;
 import io.vertx.core.http.HttpHeaders;
+import io.vertx.core.http.RequestOptions;
 import io.vertx.core.parsetools.RecordParser;
 
 public class ScrapeJob implements Handler<Long> {
@@ -71,21 +73,25 @@ public class ScrapeJob implements Handler<Long> {
          log.tracef("Scraping %s:%s, %s using token %s", parsed.getHost(), port, parsed.getFile(), scraper.authToken);
          Promise<HashMap<String, Double>> promise = Promise.promise();
          futures.add(promise.future());
-         scraper.httpClient.get(port, parsed.getHost(), parsed.getFile())
-               .putHeader(HttpHeaders.AUTHORIZATION, "Bearer " + scraper.authToken)
-               .handler(response -> {
-                  if (response.statusCode() != 200) {
-                     log.errorf("Unexpected response status: %d %s", response.statusCode(), response.statusMessage());
-                     promise.fail("Unexpected response status");
-                     return;
-                  }
-                  processBody(response, promise);
+         RequestOptions requestOptions = new RequestOptions().setSsl("https".equalsIgnoreCase(parsed.getProtocol()))
+               .setHost(parsed.getHost()).setPort(port).setURI(parsed.getFile());
+         HttpClientRequest request = scraper.httpClient.get(requestOptions);
+         if (scraper.authToken != null && !scraper.authToken.isEmpty()) {
+            request.putHeader(HttpHeaders.AUTHORIZATION, "Bearer " + scraper.authToken);
+         }
+         request.handler(response -> {
+            if (response.statusCode() != 200) {
+               log.errorf("Unexpected response status: %d %s", response.statusCode(), response.statusMessage());
+               promise.fail("Unexpected response status");
+               return;
+            }
+            processBody(response, promise);
          }).exceptionHandler(error -> {
             log.errorf(error, "Request failed");
             promise.fail("Request failed");
          }).end();
       }
-      CompositeFuture.all(futures).setHandler(result -> {
+      CompositeFuture.all(futures).onComplete(result -> {
          if (result.failed()) {
             log.errorf(result.cause(), "Cannot write results");
             return;

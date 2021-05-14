@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -35,11 +36,11 @@ import io.vertx.core.http.HttpClientOptions;
 public class Scraper {
     private static final Logger log = Logger.getLogger(ScrapeJob.class);
 
-    @ConfigProperty(name = "scrape.dir", defaultValue = "")
-    String scrapeDir;
+    @ConfigProperty(name = "scrape.dir")
+    Optional<String> scrapeDir;
 
-    @ConfigProperty(name = "scrape.auth.token", defaultValue = "")
-    String authToken;
+    @ConfigProperty(name = "scrape.auth.token")
+    Optional<String> authToken;
 
     @Inject
     Vertx vertx;
@@ -50,19 +51,18 @@ public class Scraper {
     public void init() {
         HttpClientOptions options = new HttpClientOptions().setSsl(true).setTrustAll(true).setVerifyHost(false);
         httpClient = vertx.createHttpClient(options);
-        if (scrapeDir == null || scrapeDir.isEmpty()) {
-            scrapeDir = System.getProperty("java.io.tmpdir");
-        }
-        if (authToken == null || authToken.isEmpty()) {
+        scrapeDir = Optional.of(scrapeDir.orElseGet(() -> System.getProperty("java.io.tmpdir")));
+        authToken = authToken.or(() -> {
             java.nio.file.Path tokenPath = Paths.get("/var/run/secrets/kubernetes.io/serviceaccount/token");
             if (tokenPath.toFile().exists()) {
                 try {
-                    authToken = new String(Files.readAllBytes(tokenPath), StandardCharsets.UTF_8);
+                    return Optional.of(Files.readString(tokenPath));
                 } catch (IOException e) {
                     log.error("Failed to read token", e);
                 }
             }
-        }
+            return Optional.empty();
+        });
     }
 
     @POST
@@ -70,7 +70,7 @@ public class Scraper {
     @Produces(MediaType.TEXT_PLAIN)
     @Consumes(MediaType.APPLICATION_JSON)
     public String start(Config config) throws IOException {
-        File file = Files.createTempFile(Paths.get(scrapeDir), "nodescrape-", ".json").toFile();
+        File file = Files.createTempFile(Paths.get(scrapeDir.get()), "nodescrape-", ".json").toFile();
         JsonGenerator generator = new JsonFactory().setCodec(new ObjectMapper()).createGenerator(file, JsonEncoding.UTF8);
         ScrapeJob job = new ScrapeJob(this, config, file, generator);
         job.timerId = vertx.setPeriodic(config.scrapeInterval, job);
