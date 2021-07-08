@@ -70,14 +70,14 @@ public class ScrapeJob implements Handler<Long> {
             continue;
          }
          int port = parsed.getPort() < 0 ? parsed.getDefaultPort() : parsed.getPort();
-         log.tracef("Scraping %s:%s, %s using token %s", parsed.getHost(), port, parsed.getFile(), scraper.authToken);
+         log.tracef("Scraping %s:%s, %s using token %s", parsed.getHost(), port, parsed.getFile(), scraper.authToken.orElse("<no token>"));
          Promise<HashMap<String, Double>> promise = Promise.promise();
          futures.add(promise.future());
          RequestOptions requestOptions = new RequestOptions().setSsl("https".equalsIgnoreCase(parsed.getProtocol()))
                .setHost(parsed.getHost()).setPort(port).setURI(parsed.getFile());
          HttpClientRequest request = scraper.httpClient.get(requestOptions);
-         if (scraper.authToken != null && !scraper.authToken.isEmpty()) {
-            request.putHeader(HttpHeaders.AUTHORIZATION, "Bearer " + scraper.authToken);
+         if (scraper.authToken != null && scraper.authToken.isPresent()) {
+            request.putHeader(HttpHeaders.AUTHORIZATION, "Bearer " + scraper.authToken.get());
          }
          request.handler(response -> {
             if (response.statusCode() != 200) {
